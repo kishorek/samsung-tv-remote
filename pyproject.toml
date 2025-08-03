@@ -1,0 +1,20 @@
+[project]
+name = "samsung-remote"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "KishoreK",email = "libcomet@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "websocket-client (==1.6.4)",
+    "requests (==2.31.0)",
+    "samsungtvws[async,encrypted] (>=2.7.2,<3.0.0)",
+    "wakeonlan (>=3.1.0,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
