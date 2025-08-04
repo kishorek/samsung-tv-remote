@@ -7,6 +7,9 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from samsungtvws import SamsungTVWS
 import socket
+import ipaddress
+import concurrent.futures
+import time
 
 
 class SamsungTVRemote:
@@ -51,6 +54,7 @@ class SamsungTVRemote:
             self.connected = True
             self.tv_ip = ip_address
             self.tv_name = info.get("name", "Samsung TV")
+            # apps = self.tv.app_list()
             self.save_config()
             return True, f"Connected to {self.tv_name}"
         except Exception as e:
@@ -100,6 +104,97 @@ class SamsungTVRemote:
             "tv_name": self.tv_name,
         }
 
+    def get_local_ip(self):
+        """Get the local IP address of this machine"""
+        try:
+            # Create a socket to get local IP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                # Doesn't actually connect, just gets local IP
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+        except Exception:
+            return "127.0.0.1"
+
+    def get_network_range(self):
+        """Get the network range to scan based on local IP"""
+        local_ip = self.get_local_ip()
+        try:
+            # Get the network interface
+            for interface in socket.if_nameindex():
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                        s.connect(("8.8.8.8", 80))
+                        if s.getsockname()[0] == local_ip:
+                            # This is a simplified approach - in production you might want
+                            # to use netifaces or similar to get the actual netmask
+                            return f"{local_ip.rsplit('.', 1)[0]}.0/24"
+                except:
+                    continue
+        except:
+            pass
+        # Fallback to common home network ranges
+        return f"{local_ip.rsplit('.', 1)[0]}.0/24"
+
+    def is_samsung_tv(self, ip):
+        """Check if an IP address belongs to a Samsung TV"""
+        try:
+            # Try to connect to Samsung TV WebSocket port
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                result = s.connect_ex((ip, 8002))
+                if result == 0:
+                    # Port is open, try to get device info
+                    try:
+                        token_file = (
+                            os.path.dirname(os.path.realpath(__file__))
+                            + "/tv-token.txt"
+                        )
+                        test_tv = SamsungTVWS(host=ip, port=8002, token_file=token_file)
+                        info = test_tv.rest_device_info()
+                        if info and "name" in info:
+                            return True, info.get("name", "Samsung TV")
+                    except:
+                        pass
+            return False, None
+        except:
+            return False, None
+
+    def scan_network(self):
+        """Scan the local network for Samsung TVs"""
+        network_range = self.get_network_range()
+        print(f"Scanning network: {network_range}")
+
+        try:
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            found_tvs = []
+
+            # Use ThreadPoolExecutor for concurrent scanning
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+                # Submit all IP addresses for scanning
+                future_to_ip = {
+                    executor.submit(self.is_samsung_tv, str(ip)): str(ip)
+                    for ip in network.hosts()
+                }
+
+                # Process completed scans
+                for future in concurrent.futures.as_completed(future_to_ip, timeout=30):
+                    ip = future_to_ip[future]
+                    try:
+                        is_tv, name = future.result()
+                        if is_tv:
+                            found_tvs.append({"ip": ip, "name": name})
+                            print(f"Found Samsung TV: {ip} ({name})")
+                    except concurrent.futures.TimeoutError:
+                        print(f"Timeout scanning {ip}")
+                    except Exception as e:
+                        print(f"Error scanning {ip}: {e}")
+
+            return found_tvs
+
+        except Exception as e:
+            print(f"Error scanning network: {e}")
+            return []
+
 
 class RemoteHandler(BaseHTTPRequestHandler):
     remote = SamsungTVRemote()
@@ -115,6 +210,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
         elif parsed_path.path == "/api/apps":
             apps = self.remote.get_apps()
             self.serve_json({"apps": apps})
+        elif parsed_path.path == "/api/scan":
+            found_tvs = self.remote.scan_network()
+            self.serve_json({"success": True, "tvs": found_tvs})
         else:
             self.send_error(404)
 
@@ -373,6 +471,58 @@ class RemoteHandler(BaseHTTPRequestHandler):
         .message.success { background: #27ae60; }
         .message.error { background: #e74c3c; }
         
+        .scan-results {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .scan-results h4 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .tv-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .tv-info {
+            flex: 1;
+        }
+        
+        .tv-name {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .tv-ip {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .tv-connect-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .tv-connect-btn:hover {
+            background: #218838;
+        }
+        
         @media (max-width: 480px) {
             .container {
                 margin: 0;
@@ -396,6 +546,13 @@ class RemoteHandler(BaseHTTPRequestHandler):
             <div class="input-group">
                 <input type="text" id="ipInput" placeholder="Enter TV IP Address (e.g., 192.168.1.100)">
                 <button id="connectBtn" class="btn-primary" onclick="connectToTV()">Connect</button>
+            </div>
+            <div class="input-group">
+                <button id="scanBtn" class="btn-warning" onclick="scanNetwork()">🔍 Auto-Detect TV</button>
+            </div>
+            <div id="scanResults" class="scan-results" style="display: none;">
+                <h4>Found Samsung TVs:</h4>
+                <div id="tvList"></div>
             </div>
         </div>
         
@@ -588,6 +745,58 @@ class RemoteHandler(BaseHTTPRequestHandler):
             setTimeout(() => {
                 messageEl.className = `message ${type}`;
             }, 3000);
+        }
+        
+        async function scanNetwork() {
+            const scanBtn = document.getElementById('scanBtn');
+            const scanResults = document.getElementById('scanResults');
+            const tvList = document.getElementById('tvList');
+            
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Scanning...';
+            scanResults.style.display = 'none';
+            tvList.innerHTML = '';
+            
+            showMessage('Scanning network for Samsung TVs...', 'success');
+            
+            try {
+                const response = await fetch('/api/scan');
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.tvs && data.tvs.length > 0) {
+                        tvList.innerHTML = '';
+                        data.tvs.forEach(tv => {
+                            const tvItem = document.createElement('div');
+                            tvItem.className = 'tv-item';
+                            tvItem.innerHTML = `
+                                <div class="tv-info">
+                                    <div class="tv-name">${tv.name}</div>
+                                    <div class="tv-ip">${tv.ip}</div>
+                                </div>
+                                <button class="tv-connect-btn" onclick="connectToDetectedTV('${tv.ip}')">Connect</button>
+                            `;
+                            tvList.appendChild(tvItem);
+                        });
+                        scanResults.style.display = 'block';
+                        showMessage(`Found ${data.tvs.length} Samsung TV(s)`, 'success');
+                    } else {
+                        showMessage('No Samsung TVs found on the network', 'error');
+                    }
+                } else {
+                    showMessage('Network scan failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Error scanning network: ' + error.message, 'error');
+            }
+            
+            scanBtn.disabled = false;
+            scanBtn.textContent = '🔍 Auto-Detect TV';
+        }
+        
+        function connectToDetectedTV(ip) {
+            document.getElementById('ipInput').value = ip;
+            connectToTV();
         }
         
         // Add keyboard shortcuts
