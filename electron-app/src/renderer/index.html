@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Samsung TV Remote</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <style>
+         :root {
+            --bg: #0e1116;
+            --panel: #151a21;
+            --panel-border: #222833;
+            --text: #e7ecf3;
+            --muted: #9aa4b2;
+            --accent: #3b82f6;
+            --accent-2: #16a34a;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --btn: #1f2630;
+            --btn-hover: #262f3b;
+            --btn-active: #2d3746;
+            --btn-disabled: #1a202a;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html,
+        body {
+            height: 100%;
+        }
+        
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            margin: 0;
+            padding: 16px;
+            background: radial-gradient( 1200px 600px at 20% -10%, #17202b 0%, var(--bg) 60%);
+            color: var(--text);
+        }
+        
+        h2 {
+            margin: 0 0 12px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .status {
+            font-size: 13px;
+            color: var(--muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+            box-shadow: 0 0 0 2px #0b0f14 inset;
+        }
+        
+        .status-dot.connected {
+            background: #22c55e;
+        }
+        
+        .status-dot.disconnected {
+            background: #ef4444;
+        }
+        
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        
+        .section {
+            background: linear-gradient( 180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.05)), var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+        
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        
+        label {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        
+        input[type="text"] {
+            flex: 1 1 200px;
+            min-width: 180px;
+            background: #0d1117;
+            color: var(--text);
+            border: 1px solid #263141;
+            border-radius: 8px;
+            padding: 8px 10px;
+            outline: none;
+        }
+        
+        input[type="checkbox"] {
+            transform: translateY(1px);
+        }
+        
+        .spacer {
+            flex: 1;
+        }
+        
+        .btn {
+            appearance: none;
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            min-width: 64px;
+            color: var(--text);
+            background: var(--btn);
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.05s ease;
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+        }
+        
+        .btn:hover {
+            background: var(--btn-hover);
+        }
+        
+        .btn:active {
+            background: var(--btn-active);
+            transform: translateY(1px);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+        }
+        
+        .btn:disabled {
+            background: var(--btn-disabled);
+            color: #7c8796;
+            cursor: not-allowed;
+        }
+        
+        .btn.primary {
+            background: linear-gradient( 180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)), var(--accent);
+        }
+        
+        .btn.danger {
+            background: linear-gradient( 180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)), var(--danger);
+        }
+        
+        .btn.success {
+            background: linear-gradient( 180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)), var(--accent-2);
+        }
+        
+        .btn.ghost {
+            background: transparent;
+            border: 1px solid #2b3544;
+        }
+        
+        .btn.circle {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: inline-grid;
+            place-items: center;
+            padding: 0;
+        }
+        
+        .btn.pill {
+            border-radius: 999px;
+            min-width: 76px;
+        }
+        
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        
+        .grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+        
+        .grid-wide {
+            grid-column: 1 / -1;
+        }
+        
+        .center {
+            text-align: center;
+        }
+        
+        .remote-top {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .dpad {
+            display: grid;
+            grid-template-columns: 56px 56px 56px;
+            grid-template-rows: 56px 56px 56px;
+            gap: 8px;
+            justify-content: center;
+        }
+        
+        .dpad .spacer {
+            width: 56px;
+            height: 56px;
+        }
+        
+        .subtle {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        
+        .note {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+        
+        .color-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        
+        .btn.red {
+            background: #b91c1c;
+        }
+        
+        .btn.green {
+            background: #15803d;
+        }
+        
+        .btn.yellow {
+            background: #a16207;
+        }
+        
+        .btn.blue {
+            background: #1d4ed8;
+        }
+        
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        
+        .app-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 10px;
+            background: #0d1117;
+            border: 1px solid #263141;
+            border-radius: 8px;
+        }
+        
+        .app-title {
+            font-size: 13px;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h2>Samsung TV Remote</h2>
+        <div class="status" id="statusWrap">
+            <span class="status-dot disconnected" id="statusDot"></span
+        ><span id="status">Status: Not connected</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="row" style="flex-wrap: wrap">
+            <strong style="color: var(--muted)">Quick Apps</strong>
+            <span class="spacer"></span>
+            <button class="btn pill" data-app-name="Netflix">Netflix</button>
+            <button class="btn pill" data-app-name="YouTube">YouTube</button>
+            <button class="btn pill" data-app-name="Hotstar">Hotstar</button>
+            <button class="btn pill" data-app-name="Prime">Prime Video</button>
+        </div>
+        <div class="row" style="flex-wrap: wrap; align-items: center">
+            <strong style="color: var(--muted)">Installed Apps</strong>
+            <span class="spacer"></span>
+            <input id="appSearch" type="text" placeholder="Search apps..." style="max-width: 220px" />
+            <button class="btn" id="loadAppsBtn">Load Apps</button>
+        </div>
+        <div class="row" style="flex-wrap: wrap; gap: 8px">
+            <label for="appsSelect">Choose app</label>
+            <select id="appsSelect" style="
+            min-width: 220px;
+            max-width: 100%;
+            background: #0d1117;
+            color: var(--text);
+            border: 1px solid #263141;
+            border-radius: 8px;
+            padding: 8px 10px;
+          "></select>
+            <button class="btn" id="launchSelectedBtn">Launch</button>
+        </div>
+    </div>
+
+    <div class="layout">
+        <div class="section">
+            <div class="row">
+                <label for="ip">TV IP</label>
+                <input id="ip" type="text" placeholder="192.168.1.50" />
+                <label for="appName">App Name</label>
+                <input id="appName" type="text" value="Electron Remote" />
+            </div>
+            <div class="row">
+                <label><input id="secure" type="checkbox" /> Secure (wss:8002)</label>
+                <label><input id="autoConnect" type="checkbox" /> Auto-connect</label>
+                <span class="spacer"></span>
+                <button class="btn primary" id="connectBtn">Connect</button>
+                <button class="btn ghost" id="disconnectBtn">Disconnect</button>
+            </div>
+            <div class="row">
+                <label for="token">Token</label>
+                <input id="token" type="text" placeholder="(auto after pairing)" />
+                <button class="btn" id="saveTokenBtn">Save Token</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="remote-top">
+                <button class="btn circle danger" data-key="KEY_POWER">⏻</button>
+                <button class="btn pill" data-key="KEY_HOME">Home</button>
+                <button class="btn pill" data-key="KEY_MUTE">Mute</button>
+            </div>
+
+            <div class="row" style="justify-content: center; margin-top: 10px">
+                <div class="dpad">
+                    <div class="spacer"></div>
+                    <button class="btn circle" data-key="KEY_UP" data-repeat="true">
+              ▲
+            </button>
+                    <div class="spacer"></div>
+
+                    <button class="btn circle" data-key="KEY_LEFT" data-repeat="true">
+              ◀
+            </button>
+                    <button class="btn circle success" data-key="KEY_ENTER">OK</button>
+                    <button class="btn circle" data-key="KEY_RIGHT" data-repeat="true">
+              ▶
+            </button>
+
+                    <div class="spacer"></div>
+                    <button class="btn circle" data-key="KEY_DOWN" data-repeat="true">
+              ▼
+            </button>
+                    <div class="spacer"></div>
+                </div>
+            </div>
+
+            <div class="row" style="justify-content: space-between; margin-top: 10px">
+                <div class="row">
+                    <button class="btn pill" data-key="KEY_CHUP" data-repeat="true">
+              CH+
+            </button>
+                    <button class="btn pill" data-key="KEY_CHDOWN" data-repeat="true">
+              CH-
+            </button>
+                </div>
+                <div class="row">
+                    <button class="btn pill" data-key="KEY_VOLUP" data-repeat="true">
+              VOL+
+            </button>
+                    <button class="btn pill" data-key="KEY_VOLDOWN" data-repeat="true">
+              VOL-
+            </button>
+                </div>
+            </div>
+
+            <div class="row" style="justify-content: center; margin-top: 6px">
+                <button class="btn" data-key="KEY_BACK">Back</button>
+                <button class="btn" data-key="KEY_EXIT">Exit</button>
+                <button class="btn" data-key="KEY_INFO">Info</button>
+                <button class="btn" data-key="KEY_SOURCE">Source</button>
+                <button class="btn" data-key="KEY_TOOLS">Tools</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="row" style="justify-content: center">
+                <div class="row">
+                    <button class="btn" data-key="KEY_REWIND" data-repeat="true">
+              ⏪
+            </button>
+                    <button class="btn" data-key="KEY_PLAY">▶</button>
+                    <button class="btn" data-key="KEY_PAUSE">⏸</button>
+                    <button class="btn" data-key="KEY_FF" data-repeat="true">⏩</button>
+                    <button class="btn" data-key="KEY_STOP">⏹</button>
+                </div>
+            </div>
+            <div class="color-row" style="margin-top: 8px">
+                <button class="btn red" data-key="KEY_RED">Red</button>
+                <button class="btn green" data-key="KEY_GREEN">Green</button>
+                <button class="btn yellow" data-key="KEY_YELLOW">Yellow</button>
+                <button class="btn blue" data-key="KEY_BLUE">Blue</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <details>
+                <summary style="cursor: pointer; color: var(--muted)">
+                    Channel Numbers
+                </summary>
+                <div class="grid-3" style="margin-top: 10px">
+                    <button class="btn" data-key="KEY_1">1</button>
+                    <button class="btn" data-key="KEY_2">2</button>
+                    <button class="btn" data-key="KEY_3">3</button>
+                    <button class="btn" data-key="KEY_4">4</button>
+                    <button class="btn" data-key="KEY_5">5</button>
+                    <button class="btn" data-key="KEY_6">6</button>
+                    <button class="btn" data-key="KEY_7">7</button>
+                    <button class="btn" data-key="KEY_8">8</button>
+                    <button class="btn" data-key="KEY_9">9</button>
+                    <button class="btn" data-key="KEY_PRECH">Prev</button>
+                    <button class="btn" data-key="KEY_0">0</button>
+                    <button class="btn" data-key="KEY_CH_LIST">CH List</button>
+                </div>
+            </details>
+        </div>
+
+        <div class="section">
+            <div class="row">
+                <label for="textInput">Send Text</label>
+                <input id="textInput" type="text" placeholder="Hello" />
+                <button class="btn" id="sendTextBtn">Send</button>
+            </div>
+            <div class="note">
+                Note: Text input is accepted only in certain screens. Keyboard arrows/Enter/Backspace/Escape also control navigation.
+            </div>
+        </div>
+    </div>
+
+    <script src="./renderer.js"></script>
+</body>
+
+</html>
