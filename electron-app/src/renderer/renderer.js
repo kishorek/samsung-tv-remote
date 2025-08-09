@@ -14,6 +14,7 @@ const loadAppsBtn = document.getElementById("loadAppsBtn");
 const appSearchEl = document.getElementById("appSearch");
 const appsSelectEl = document.getElementById("appsSelect");
 const launchSelectedBtn = document.getElementById("launchSelectedBtn");
+const connectionAccordion = document.getElementById("connectionAccordion");
 
 let connectedIp = null;
 let keyRepeatTimer = null;
@@ -23,9 +24,19 @@ function setStatus(msg, connected = null) {
   if (connected === true) {
     statusDot.classList.add("connected");
     statusDot.classList.remove("disconnected");
+    // Close accordion when connected
+    setConnectionAccordionState(false);
   } else if (connected === false) {
     statusDot.classList.add("disconnected");
     statusDot.classList.remove("connected");
+    // Open accordion when disconnected
+    setConnectionAccordionState(true);
+  }
+}
+
+function setConnectionAccordionState(open) {
+  if (connectionAccordion) {
+    connectionAccordion.open = open;
   }
 }
 
@@ -83,16 +94,26 @@ connectBtn.addEventListener("click", async () => {
 
   setStatus("Connecting...");
   setControlsEnabled(false);
+  connectBtn.classList.add("loading");
+  connectBtn.disabled = true;
   persistSettings();
-  const res = await window.api.connect({ ip, appName, secure });
-  if (res.ok) {
-    connectedIp = ip;
-    setStatus(`Connected to ${ip} (${secure ? "wss" : "ws"})`, true);
-    setControlsEnabled(true);
-    if (res.token) tokenEl.value = res.token;
-  } else {
-    setStatus(`Connect failed: ${res.error}`, false);
-    setControlsEnabled(false);
+  
+  try {
+    const res = await window.api.connect({ ip, appName, secure });
+    if (res.ok) {
+      connectedIp = ip;
+      setStatus(`Connected to ${ip} (${secure ? "wss" : "ws"})`, true);
+      setControlsEnabled(true);
+      if (res.token) tokenEl.value = res.token;
+      // Auto-load apps after successful connection
+      loadApps(ip);
+    } else {
+      setStatus(`Connect failed: ${res.error}`, false);
+      setControlsEnabled(false);
+    }
+  } finally {
+    connectBtn.classList.remove("loading");
+    connectBtn.disabled = false;
   }
 });
 
@@ -174,26 +195,18 @@ async function renderAppsList(apps) {
 }
 
 let cachedApps = [];
-loadAppsBtn?.addEventListener("click", async () => {
-  const ip = ipEl.value.trim();
-  if (!ip) {
-    setStatus("Enter TV IP first", false);
-    return;
-  }
-  setStatus("Loading apps...");
+
+async function loadApps(ip) {
+  if (!ip) return;
   const res = await window.api.listApps({ ip });
   if (res.ok) {
     cachedApps = res.apps || [];
     renderAppsList(cachedApps);
-    setStatus("Apps loaded", true);
   } else {
-    setStatus(`Load apps failed: ${res.error}`, false);
+    console.warn(`Failed to load apps: ${res.error}`);
   }
-});
+}
 
-appSearchEl?.addEventListener("input", () => {
-  renderAppsList(cachedApps);
-});
 
 launchSelectedBtn?.addEventListener("click", async () => {
   const ip = ipEl.value.trim();
@@ -203,8 +216,18 @@ launchSelectedBtn?.addEventListener("click", async () => {
   }
   const appId = appsSelectEl?.value || "";
   if (!appId) return;
-  const res = await window.api.launchApp({ ip, appId });
-  if (!res.ok) setStatus(`Launch failed: ${res.error}`, false);
+  
+  launchSelectedBtn.classList.add("loading");
+  launchSelectedBtn.disabled = true;
+  
+  try {
+    const res = await window.api.launchApp({ ip, appId });
+    if (!res.ok) setStatus(`Launch failed: ${res.error}`, false);
+    else setStatus("App launched successfully", true);
+  } finally {
+    launchSelectedBtn.classList.remove("loading");
+    launchSelectedBtn.disabled = false;
+  }
 });
 
 // Long-press repeat for navigation/volume/channel
@@ -295,6 +318,8 @@ document.addEventListener("keydown", (e) => {
 loadSettings();
 setControlsEnabled(false);
 refreshTokenField();
+// Initialize accordion state - open when not connected
+setConnectionAccordionState(true);
 // Auto-connect if requested
 if (autoConnectEl.checked && ipEl.value.trim()) {
   connectBtn.click();

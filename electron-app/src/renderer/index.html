@@ -82,12 +82,33 @@
             gap: 12px;
         }
         
+        @media (min-width: 768px) {
+            .layout {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .section.span-full {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .layout {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+        
         .section {
             background: linear-gradient( 180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.05)), var(--panel);
             border: 1px solid var(--panel-border);
             border-radius: 12px;
-            padding: 12px;
+            padding: 16px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .section:hover {
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
         }
         
         .row {
@@ -103,7 +124,7 @@
             font-size: 13px;
         }
         
-        input[type="text"] {
+        input[type="text"], select {
             flex: 1 1 200px;
             min-width: 180px;
             background: #0d1117;
@@ -112,6 +133,11 @@
             border-radius: 8px;
             padding: 8px 10px;
             outline: none;
+            transition: border-color 0.2s ease;
+        }
+        
+        input[type="text"]:focus, select:focus {
+            border-color: var(--accent);
         }
         
         input[type="checkbox"] {
@@ -182,6 +208,28 @@
             min-width: 76px;
         }
         
+        .btn.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .btn.loading::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid currentColor;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            margin-left: 8px;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
         .grid-3 {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -231,6 +279,15 @@
         .subtle {
             font-size: 12px;
             color: var(--muted);
+        }
+        
+        h3 {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-weight: 500;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .note {
@@ -285,6 +342,19 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        
+        /* Accordion styles */
+        details[open] summary span {
+            transform: rotate(90deg);
+        }
+        
+        details summary {
+            outline: none;
+        }
+        
+        details summary::-webkit-details-marker {
+            display: none;
+        }
     </style>
 </head>
 
@@ -297,59 +367,57 @@
         </div>
     </div>
 
-    <div class="section">
-        <div class="row" style="flex-wrap: wrap">
-            <strong style="color: var(--muted)">Quick Apps</strong>
-            <span class="spacer"></span>
+    <div class="section span-full">
+        <h3 style="margin: 0 0 12px; color: var(--muted); font-weight: 500;">Quick Apps</h3>
+        <div class="row" style="flex-wrap: wrap; margin-bottom: 16px;">
             <button class="btn pill" data-app-name="Netflix">Netflix</button>
             <button class="btn pill" data-app-name="YouTube">YouTube</button>
             <button class="btn pill" data-app-name="Hotstar">Hotstar</button>
             <button class="btn pill" data-app-name="Prime">Prime Video</button>
         </div>
-        <div class="row" style="flex-wrap: wrap; align-items: center">
-            <strong style="color: var(--muted)">Installed Apps</strong>
-            <span class="spacer"></span>
-            <input id="appSearch" type="text" placeholder="Search apps..." style="max-width: 220px" />
-            <button class="btn" id="loadAppsBtn">Load Apps</button>
-        </div>
+        <h3 style="margin: 0 0 12px; color: var(--muted); font-weight: 500;">Installed Apps</h3>
         <div class="row" style="flex-wrap: wrap; gap: 8px">
             <label for="appsSelect">Choose app</label>
             <select id="appsSelect" style="
             min-width: 220px;
             max-width: 100%;
-            background: #0d1117;
-            color: var(--text);
-            border: 1px solid #263141;
-            border-radius: 8px;
-            padding: 8px 10px;
           "></select>
-            <button class="btn" id="launchSelectedBtn">Launch</button>
+            <button class="btn success" id="launchSelectedBtn">Launch</button>
         </div>
     </div>
 
     <div class="layout">
-        <div class="section">
-            <div class="row">
-                <label for="ip">TV IP</label>
-                <input id="ip" type="text" placeholder="192.168.1.50" />
-                <label for="appName">App Name</label>
-                <input id="appName" type="text" value="Electron Remote" />
-            </div>
-            <div class="row">
-                <label><input id="secure" type="checkbox" /> Secure (wss:8002)</label>
-                <label><input id="autoConnect" type="checkbox" /> Auto-connect</label>
-                <span class="spacer"></span>
-                <button class="btn primary" id="connectBtn">Connect</button>
-                <button class="btn ghost" id="disconnectBtn">Disconnect</button>
-            </div>
-            <div class="row">
-                <label for="token">Token</label>
-                <input id="token" type="text" placeholder="(auto after pairing)" />
-                <button class="btn" id="saveTokenBtn">Save Token</button>
-            </div>
+        <div class="section span-full">
+            <details id="connectionAccordion" open>
+                <summary style="cursor: pointer; color: var(--muted); font-weight: 500; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; list-style: none; display: flex; align-items: center; gap: 8px;">
+                    <span style="transition: transform 0.2s ease;">▶</span>
+                    Connection Settings
+                </summary>
+                <div style="margin-top: 12px;">
+                    <div class="row">
+                        <label for="ip">TV IP</label>
+                        <input id="ip" type="text" placeholder="192.168.1.50" />
+                        <label for="appName">App Name</label>
+                        <input id="appName" type="text" value="Electron Remote" />
+                    </div>
+                    <div class="row">
+                        <label><input id="secure" type="checkbox" /> Secure (wss:8002)</label>
+                        <label><input id="autoConnect" type="checkbox" /> Auto-connect</label>
+                        <span class="spacer"></span>
+                        <button class="btn primary" id="connectBtn">Connect</button>
+                        <button class="btn ghost" id="disconnectBtn">Disconnect</button>
+                    </div>
+                    <div class="row">
+                        <label for="token">Token</label>
+                        <input id="token" type="text" placeholder="(auto after pairing)" />
+                        <button class="btn" id="saveTokenBtn">Save Token</button>
+                    </div>
+                </div>
+            </details>
         </div>
 
         <div class="section">
+            <h3 style="margin: 0 0 12px; color: var(--muted); font-weight: 500;">Remote Control</h3>
             <div class="remote-top">
                 <button class="btn circle danger" data-key="KEY_POWER">⏻</button>
                 <button class="btn pill" data-key="KEY_HOME">Home</button>
@@ -409,6 +477,7 @@
         </div>
 
         <div class="section">
+            <h3 style="margin: 0 0 12px; color: var(--muted); font-weight: 500;">Media Controls</h3>
             <div class="row" style="justify-content: center">
                 <div class="row">
                     <button class="btn" data-key="KEY_REWIND" data-repeat="true">
@@ -430,7 +499,7 @@
 
         <div class="section">
             <details>
-                <summary style="cursor: pointer; color: var(--muted)">
+                <summary style="cursor: pointer; color: var(--muted); font-weight: 500;">
                     Channel Numbers
                 </summary>
                 <div class="grid-3" style="margin-top: 10px">
@@ -450,11 +519,12 @@
             </details>
         </div>
 
-        <div class="section">
+        <div class="section span-full">
+            <h3 style="margin: 0 0 12px; color: var(--muted); font-weight: 500;">Text Input</h3>
             <div class="row">
                 <label for="textInput">Send Text</label>
                 <input id="textInput" type="text" placeholder="Hello" />
-                <button class="btn" id="sendTextBtn">Send</button>
+                <button class="btn success" id="sendTextBtn">Send</button>
             </div>
             <div class="note">
                 Note: Text input is accepted only in certain screens. Keyboard arrows/Enter/Backspace/Escape also control navigation.
