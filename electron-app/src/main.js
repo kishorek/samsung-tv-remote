@@ -37,7 +37,7 @@ if (isElectronRuntime) {
         app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
 
         mainWindow = new BrowserWindow({
-            width: 520,
+            width: 420,
             height: 820,
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
@@ -166,24 +166,48 @@ if (isElectronRuntime) {
 
     // Launch app by id or fuzzy name, with fallbacks
     ipcMain.handle('launch-app', async(event, { ip, appId, appName }) => {
+        console.log('Launch app request:', { ip, appId, appName });
         const remote = remotes.get(ip);
         const isConnected = Boolean(remote && remote.isConnected());
+        console.log('Connection status:', isConnected);
 
         // Helper: try launch by appId via WS if connected, else REST
         const tryLaunchById = async(id) => {
             if (!id) throw new Error('appId required');
+            console.log('Trying to launch app ID:', id);
+            
+            // Try both methods for better compatibility
+            let wsSuccess = false;
+            let restSuccess = false;
+            
             if (isConnected) {
                 try {
-                    await remote.launchApp(id);
-                    return true;
-                } catch (_) {
-                    // fall through to REST
+                    console.log('Attempting WebSocket launch...');
+                    const wsResult = await remote.launchApp(id);
+                    console.log('WebSocket launch result:', wsResult);
+                    // Note: Samsung TVs often don't send a proper response for app launches
+                    // So we'll also try REST as a backup
+                    wsSuccess = true;
+                } catch (wsError) {
+                    console.log('WebSocket launch failed:', wsError.message);
                 }
             }
+            
+            // Always try REST as well, as some Samsung TVs respond better to REST API
             try {
+                console.log('Attempting REST launch...');
                 await launchAppRest(ip, id, remote ? remote.secure : false);
+                console.log('REST launch successful');
+                restSuccess = true;
+            } catch (restError) {
+                console.log('REST launch failed:', restError.message);
+            }
+            
+            if (wsSuccess || restSuccess) {
+                console.log('Launch attempted via:', wsSuccess ? 'WebSocket' : '', restSuccess ? 'REST' : '');
                 return true;
-            } catch (_) {
+            } else {
+                console.log('Both WebSocket and REST launch methods failed');
                 return false;
             }
         };
@@ -200,25 +224,37 @@ if (isElectronRuntime) {
                 // First attempt: if connected, try to resolve via installed apps list
                 if (isConnected) {
                     try {
+                        console.log('Fetching installed apps list...');
                         const apps = await remote.listApps();
-                        const match = apps.find(a => (a.name || '').toLowerCase().includes(query));
+                        console.log('Available apps on TV:', apps.map(a => `${a.name} (${a.appId || a.id})`));
+                        
+                        // Try exact name match first
+                        let match = apps.find(a => (a.name || '').toLowerCase() === query);
+                        if (!match) {
+                            // Try partial name match
+                            match = apps.find(a => (a.name || '').toLowerCase().includes(query));
+                        }
+                        
                         if (match) {
+                            console.log(`Found matching app: ${match.name} with ID: ${match.appId || match.id}`);
                             const ok = await tryLaunchById(match.appId || match.id);
                             if (ok) return { ok: true };
+                        } else {
+                            console.log(`No app found matching "${query}" in installed apps`);
                         }
-                    } catch (_) {
-                        // ignore and fallback to known IDs
+                    } catch (listError) {
+                        console.log('Failed to get installed apps list:', listError.message);
                     }
                 }
 
                 // Fallback: try known app IDs by common names
                 const NAME_TO_APPIDS = {
-                    'netflix': ['3201907018807', '11101200001'],
-                    'youtube': ['3201907018745', '111299001912'],
-                    'prime': ['3201512006785', '3201909019271', 'amazon'],
-                    'prime video': ['3201512006785', '3201909019271'],
-                    'amazon prime video': ['3201512006785', '3201909019271'],
-                    'hotstar': ['3201708012872']
+                    'netflix': ['3201907018807', '11101200001', 'Netflix', 'netflixui2'],
+                    'youtube': ['3201907018745', '111299001912', 'YouTube', 'youtube.leanback.v4'],
+                    'prime': ['3201512006785', '3201909019271', 'amazon', 'PrimeVideo', 'AmazonInstantVideo'],
+                    'prime video': ['3201512006785', '3201909019271', 'PrimeVideo', 'AmazonInstantVideo'],
+                    'amazon prime video': ['3201512006785', '3201909019271', 'PrimeVideo', 'AmazonInstantVideo'],
+                    'hotstar': ['3201708012872', 'Hotstar', 'hotstar']
                 };
                 const candidates = NAME_TO_APPIDS[query] || [];
                 for (const candidate of candidates) {

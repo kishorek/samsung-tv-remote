@@ -1,5 +1,5 @@
 {
-    "name": "Samsung TV Remote",
+    "name": "SamsungTVRemote",
     "version": "1.0.0",
     "description": "Samsung Smart TV Remote",
     "main": "src/main.js",

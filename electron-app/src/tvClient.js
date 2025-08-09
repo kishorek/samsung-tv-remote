@@ -136,9 +136,47 @@ class SamsungRemote {
     _send(payload) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected()) return reject(new Error('Socket not connected'));
+            
+            // Set up response listener for launch commands
+            let responseHandler = null;
+            if (payload.params && payload.params.event === 'ed.apps.launch') {
+                const timeout = setTimeout(() => {
+                    console.log('Launch command timeout - no response from TV');
+                    if (responseHandler) this.ws.removeListener('message', responseHandler);
+                    resolve('timeout'); // Don't reject, as Samsung TVs often don't respond to launch
+                }, 3000);
+                
+                responseHandler = (data) => {
+                    try {
+                        const msg = JSON.parse(data.toString());
+                        console.log('TV response to launch command:', JSON.stringify(msg));
+                        if (msg.event === 'ed.apps.launch' || msg.params?.event === 'ed.apps.launch') {
+                            clearTimeout(timeout);
+                            this.ws.removeListener('message', responseHandler);
+                            resolve(msg);
+                        }
+                    } catch (e) {
+                        // Ignore parse errors
+                    }
+                };
+                this.ws.on('message', responseHandler);
+            }
+            
             try {
-                this.ws.send(JSON.stringify(payload), (err) => (err ? reject(err) : resolve()));
+                this.ws.send(JSON.stringify(payload), (err) => {
+                    if (err) {
+                        if (responseHandler) {
+                            this.ws.removeListener('message', responseHandler);
+                        }
+                        reject(err);
+                    } else if (!responseHandler) {
+                        resolve();
+                    }
+                });
             } catch (e) {
+                if (responseHandler) {
+                    this.ws.removeListener('message', responseHandler);
+                }
                 reject(e);
             }
         });
@@ -231,24 +269,63 @@ class SamsungRemote {
     // Launch app by id
     async launchApp(appId) {
         if (!appId) throw new Error('appId required');
-        const payload = {
-            method: 'ms.channel.emit',
-            params: {
-                to: 'host',
-                event: 'ed.apps.launch',
-                data: { appId: String(appId) }
+        console.log('SamsungRemote.launchApp called with appId:', appId);
+        
+        // Try multiple WebSocket launch methods
+        const methods = [
+            // Method 1: Standard app launch
+            {
+                method: 'ms.channel.emit',
+                params: {
+                    to: 'host',
+                    event: 'ed.apps.launch',
+                    data: { appId: String(appId) }
+                }
+            },
+            // Method 2: Alternative launch format
+            {
+                method: 'ms.remote.control',
+                params: {
+                    Cmd: 'LaunchApp',
+                    DataOfCmd: String(appId),
+                    Option: false,
+                    TypeOfRemote: 'SendRemoteKey'
+                }
+            },
+            // Method 3: Direct app launch
+            {
+                method: 'ms.channel.emit',
+                params: {
+                    event: 'ed.apps.launch',
+                    to: 'host',
+                    data: {
+                        action_type: 'NATIVE_LAUNCH',
+                        appId: String(appId)
+                    }
+                }
             }
-        };
-        try {
-            return await this._send(payload);
-        } catch (e) {
-            // Fallback to REST API when WebSocket launch fails or is unsupported
-            return launchAppRest(this.ip, String(appId), this.secure);
+        ];
+        
+        for (let i = 0; i < methods.length; i++) {
+            const payload = methods[i];
+            console.log(`Trying WebSocket launch method ${i + 1}:`, JSON.stringify(payload));
+            try {
+                const result = await this._send(payload);
+                console.log(`WebSocket launch method ${i + 1} response:`, result);
+                return result;
+            } catch (e) {
+                console.log(`WebSocket launch method ${i + 1} failed:`, e.message);
+                if (i === methods.length - 1) {
+                    // Last method failed, throw to trigger REST fallback
+                    throw e;
+                }
+            }
         }
     }
 }
 
 function launchAppRest(ip, appId, secure = false) {
+    console.log('launchAppRest called with:', { ip, appId, secure });
     return new Promise((resolve, reject) => {
         if (!ip) return reject(new Error('ip required'));
         if (!appId) return reject(new Error('appId required'));
@@ -262,23 +339,35 @@ function launchAppRest(ip, appId, secure = false) {
             headers: { 'Content-Type': 'application/json' },
             rejectUnauthorized: false
         };
+        console.log('REST request options:', options);
         const mod = isHttps ? https : http;
         const req = mod.request(options, (res) => {
+            console.log('REST response status:', res.statusCode);
             let body = '';
             res.on('data', (chunk) => (body += chunk));
             res.on('end', () => {
+                console.log('REST response body:', body);
                 if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log('REST launch successful');
                     resolve();
                 } else {
                     const msg = body || `HTTP ${res.statusCode}`;
+                    console.log('REST launch failed with status/body:', msg);
                     reject(new Error(`REST launch failed: ${msg}`));
                 }
             });
         });
-        req.on('error', reject);
+        req.on('error', (err) => {
+            console.log('REST request error:', err.message);
+            reject(err);
+        });
         try {
-            req.write(JSON.stringify({ action: 'LAUNCH' }));
-        } catch (e) {}
+            const payload = JSON.stringify({ action: 'LAUNCH' });
+            console.log('Sending REST payload:', payload);
+            req.write(payload);
+        } catch (e) {
+            console.log('Error writing REST payload:', e.message);
+        }
         req.end();
     });
 }
